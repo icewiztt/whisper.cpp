@@ -60,8 +60,9 @@ WHISPER_EXECUTABLE="${WHISPER_EXECUTABLE:-${SCRIPT_DIR}/../main}";
 # Set to desired language to be translated into english
 WHISPER_LANG="${WHISPER_LANG:-en}";
 
-# Default to 4 threads (this was most performant on my 2020 M1 MBP)
 WHISPER_THREAD_COUNT="${WHISPER_THREAD_COUNT:-4}";
+
+WHISPER_PROCESSOR_COUNT="${WHISPER_PROCESSOR_COUNT:-1}";
 
 msg() {
     echo >&2 -e "${1-}"
@@ -150,8 +151,8 @@ msg "Downloading VOD...";
 # for videos only available to logged-in users.
 ################################################################################
 yt-dlp \
-    -f "bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best" \
-    -o "${temp_dir}/%(title)s-%(id)s.vod.mp4" \
+    -f "m4a" \
+    -o "${temp_dir}/%(title)s-%(id)s.vod.m4a" \
     --print-to-file "%(filename)s" "${temp_filename}" \
     --no-simulate \
     --no-write-auto-subs \
@@ -161,11 +162,11 @@ yt-dlp \
     --xattrs \
     "${source_url}";
 
-title_name="$(xargs basename -s .vod.mp4 < ${temp_filename})";
+title_name="$(xargs basename -s .vod.m4a < ${temp_filename})";
 
 msg "Extracting audio and resampling...";
 
-ffmpeg -i "${temp_dir}/${title_name}.vod.mp4"  \
+ffmpeg -i "${temp_dir}/${title_name}.vod.m4a"  \
     -hide_banner \
     -vn \
     -loglevel error \
@@ -183,19 +184,11 @@ msg "Whisper specified at: '${WHISPER_EXECUTABLE}'";
     -l "${WHISPER_LANG}" \
     -f "${temp_dir}/${title_name}.vod-resampled.wav" \
     -t "${WHISPER_THREAD_COUNT}" \
-    -osrt \
-    --translate;
+    -p "${WHISPER_PROCESSOR_COUNT}" \
+    -otxt;
 
-msg "Embedding subtitle track...";
+cp "${temp_dir}/${title_name}.vod-resampled.wav.txt" .; 
 
-ffmpeg -i "${temp_dir}/${title_name}.vod.mp4" \
-    -hide_banner \
-    -loglevel error \
-    -i "${temp_dir}/${title_name}.vod-resampled.wav.srt" \
-    -c copy \
-    -c:s mov_text \
-    -y "${title_name}-res.mp4";
+cleanup "${temp_dir}";
 
-#cleanup "${temp_dir}";
-
-msg "Done! Your finished file is ready: ${title_name}-res.mp4";
+msg "Done! Your finished file is ready: ${title_name}.vod-resampled.wav.txt";
